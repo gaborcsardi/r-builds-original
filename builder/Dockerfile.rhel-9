@@ -11,6 +11,7 @@ RUN dnf -y upgrade \
     automake \
     bzip2-devel \
     cairo-devel \
+    flexiblas-devel \
     gcc-c++ \
     gcc-gfortran \
     java-11-openjdk-devel \
@@ -89,4 +90,5 @@ ENV INCLUDE_PCRE2_IN_R_3 yes
 
 COPY package.rhel-9 /package.sh
 COPY build.sh .
+COPY patches /patches
 ENTRYPOINT ./build.sh

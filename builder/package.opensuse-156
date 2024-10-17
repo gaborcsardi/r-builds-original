@@ -4,19 +4,36 @@ if [[ ! -d /tmp/output/${OS_IDENTIFIER} ]]; then
   mkdir -p "/tmp/output/${OS_IDENTIFIER}"
 fi
 
-# R 3.x requires PCRE1
-pcre_lib='pcre2-devel'
+# R 3.x requires PCRE1. On openSUSE 15.6+, R 3.x also requires PCRE2 for Pango support.
+pcre_libs='- pcre2-devel'
 if [[ "${R_VERSION}" =~ ^3 ]]; then
-  pcre_lib='pcre-devel'
+  pcre_libs='- pcre2-devel
+- pcre-devel'
 fi
 
-# create post-install script required for openblas
+# Create post-install script required for OpenBLAS.
+#
+# On RHEL and SUSE, we link R against the internal shared BLAS to make the
+# R binaries more portable and allow users to switch BLAS implementations without
+# having to recompile R. We default to OpenBLAS, but users may prefer other implementations.
+# 
+# Binary packages built against the shared BLAS are also more portable and may be used
+# with the default R distributed by RHEL/SUSE, or other R installations using
+# shared BLAS and configured with a different BLAS (such as Microsoft R Open with MKL).
+# This is especially important for RSPM's binary packages.
+#
+# On Ubuntu/Debian, we link R against the external BLAS instead (--with-blas/--with-lapack),
+# as those distributions use the alternatives system to swap BLAS libraries at runtime.
+# The default R distributions on Ubuntu/Debian use the external BLAS, so we do as well
+# for portability.
+#
+# https://cran.r-project.org/doc/manuals/r-release/R-admin.html#Shared-BLAS
 cat <<EOF >> /post-install.sh
 mv ${R_INSTALL_PATH}/lib/R/lib/libRblas.so ${R_INSTALL_PATH}/lib/R/lib/libRblas.so.keep
 ln -s /usr/lib64/libopenblas.so ${R_INSTALL_PATH}/lib/R/lib/libRblas.so
 EOF
 
-# create after-remove script to remove internal blas
+# Create after-remove script to remove internal BLAS, which won't be cleaned up automatically.
 cat <<EOF >> /after-remove.sh
 if [ -d ${R_INSTALL_PATH} ]; then
   rm -r ${R_INSTALL_PATH}
@@ -39,24 +56,24 @@ homepage: https://www.r-project.org
 license: GPLv2+
 depends:
 - fontconfig
-- ${gcc_package-gcc}
-- ${gxx_package-gcc-c++}
-- ${gfortran_package-gcc-fortran}
+- gcc
+- gcc-c++
+- gcc-fortran
 - glibc-locale
 - gzip
-- icu.691-devel
 - libbz2-devel
 - libcairo2
 - libcurl-devel
 - libfreetype6
 - libgomp1
+- libicu73_2-devel
 - libjpeg62
+- libopenblas_pthreads-devel
 - libpango-1_0-0
 - libreadline7
-- libtiff5
+- libtiff6
 - make
-- openblas-devel
-- ${pcre_lib}
+${pcre_libs}
 - tar
 - tcl
 - tk

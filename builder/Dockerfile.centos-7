@@ -2,6 +2,9 @@ FROM centos:centos7
 
 ENV OS_IDENTIFIER centos-7
 
+# Use vault.centos.org since CentOS 7 is EOL and the official mirrors are no longer available
+RUN sed -i -e 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/*
+
 RUN yum -y update \
     && yum -y install \
     autoconf \
@@ -73,4 +76,5 @@ ENV R_RD4PDF="times,hyper"
 
 COPY package.centos-7 /package.sh
 COPY build.sh .
+COPY patches /patches
 ENTRYPOINT ./build.sh

@@ -52,9 +52,14 @@ detect_os () {
   then
    distro="LEAP12"
   fi
-  if [[ -f /etc/centos-release || -f /etc/redhat-release ]]
+  if [[ -f /etc/centos-release || -f /etc/redhat-release || -f /etc/fedora-release  ]]
   then
-   distro="RedHat"
+    if [[ -f /etc/fedora-release ]]
+    then
+      distro="Fedora"
+    else
+      distro="RedHat"
+    fi
   fi
   if [[ $(cat /etc/os-release | grep -e "^CPE_NAME\=*" | cut -f 2 -d '=') =~ cpe:/o:suse:sles:12 ]]
   then
@@ -84,6 +89,10 @@ detect_os () {
   then
    distro="Rocky"
   fi
+  if [[ $(cat /etc/os-release | grep -e "^CPE_NAME\=*" | cut -f 2 -d '=') =~ cpe:/o:oracle:linux: ]]
+  then
+   distro="Oracle"
+  fi
   if [[ $(cat /etc/os-release | grep -e "^ID\=*" | cut -f 2 -d '=') == "debian" ]]; then
     distro="Debian"
   fi
@@ -94,11 +103,11 @@ detect_os () {
 # Returns the OS version
 detect_os_version () {
   os=$1
-  if [[ "${os}" =~ ^(RedHat|Alma|Rocky)$ ]]; then
+  if [[ "${os}" =~ ^(RedHat|Alma|Rocky|Fedora|Oracle)$ ]]; then
     # Get the major version. /etc/redhat-release is used if /etc/os-release isn't available,
     # e.g., on CentOS/RHEL 6.
     if [[ -f /etc/os-release ]]; then
-      cat /etc/os-release | grep VERSION_ID= | sed -E 's/VERSION_ID="([0-9.]*)"/\1/' | cut -d '.' -f 1
+      cat /etc/os-release | grep VERSION_ID= | sed -E 's/VERSION_ID="?([0-9.]*)"?/\1/' | cut -d '.' -f 1
     elif [[ -f /etc/redhat-release ]]; then
       cat /etc/redhat-release | sed -E 's/[^0-9]+([0-9.]+)[^0-9]*/\1/' | cut -d '.' -f 1
     fi
@@ -119,7 +128,7 @@ detect_os_version () {
 detect_installer_type () {
   os=$1
   case $os in
-    "RedHat" | "CentOS" | "LEAP12" | "LEAP15" | "SLES12" | "SLES15" | "Amazon" | "Alma" | "Rocky")
+    "RedHat" | "Fedora" | "CentOS" | "LEAP12" | "LEAP15" | "SLES12" | "SLES15" | "Amazon" | "Alma" | "Rocky" | "Oracle")
       echo "rpm"
       ;;
     "Ubuntu" | "Debian")
@@ -160,7 +169,7 @@ download_name () {
       ;;
   esac
   case $os in
-    "RedHat" | "CentOS" | "Amazon" | "Alma" | "Rocky")
+    "RedHat" | "Fedora" | "CentOS" | "Amazon" | "Alma" | "Rocky" | "Oracle")
       echo "R-${version}-1-1.${rpm_arch}.rpm"
       ;;
     "Ubuntu" | "Debian")
@@ -185,7 +194,10 @@ download_url () {
   else
 
     case $os in
-      "RedHat" | "CentOS" | "Amazon" | "Alma" | "Rocky")
+      "Fedora")
+        echo "${CDN_URL}/fedora-${ver}/pkgs/${name}"
+        ;;
+      "RedHat" | "CentOS" | "Amazon" | "Alma" | "Rocky" | "Oracle")
         if [ "${ver}" -ge 9 ]; then
           echo "${CDN_URL}/rhel-${ver}/pkgs/${name}"
         else
@@ -202,9 +214,13 @@ download_url () {
         echo "${CDN_URL}/opensuse-42/pkgs/${name}"
         ;;
       "LEAP15" | "SLES15")
-        if [ "${ver}" -ge 154 ]; then
+        if [ "${ver}" -ge 156 ]; then
+          echo "${CDN_URL}/opensuse-156/pkgs/${name}"
+        elif [ "${ver}" -ge 155 ]; then
+          echo "${CDN_URL}/opensuse-155/pkgs/${name}"
+        elif [ "${ver}" -eq 154 ]; then
           echo "${CDN_URL}/opensuse-154/pkgs/${name}"
-        elif [ "${ver}" -ge 153 ]; then
+        elif [ "${ver}" -eq 153 ]; then
           echo "${CDN_URL}/opensuse-153/pkgs/${name}"
         elif [ "${ver}" -eq 152 ]; then
           echo "${CDN_URL}/opensuse-152/pkgs/${name}"
@@ -304,7 +320,7 @@ install_rpm () {
       yes="-y"
   fi
   case $os in
-    "RedHat" | "CentOS" | "Amazon" | "Alma" | "Rocky")
+    "RedHat" | "Fedora" | "CentOS" | "Amazon" | "Alma" | "Rocky" | "Oracle")
       if ! has_sudo "yum"; then
         echo "Must have sudo privileges to run yum"
         exit 1
@@ -333,7 +349,9 @@ install_pre () {
   ver=$2
 
   case $os in
-    "RedHat" | "CentOS" | "Alma" | "Rocky")
+    "Fedora")
+      ;;
+    "RedHat" | "CentOS" | "Alma" | "Rocky" | "Oracle")
       install_epel "${os}" "${ver}"
       ;;
     "Amazon")
@@ -369,7 +387,7 @@ install_epel () {
       ${SUDO} yum install ${yes} https://dl.fedoraproject.org/pub/epel/epel-release-latest-6.noarch.rpm
       ;;
     "7")
-      ${SUDO} yum install ${yes} https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+      ${SUDO} yum install ${yes} https://dl.fedoraproject.org/pub/archive/epel/7/x86_64/Packages/e/epel-release-7-14.noarch.rpm
       ;;
     "8")
       ;;
@@ -377,6 +395,8 @@ install_epel () {
       if [[ "${os}" == "RedHat" ]]; then
         ${SUDO} subscription-manager repos --enable "codeready-builder-for-rhel-9-$(arch)-rpms"
         ${SUDO} dnf install ${yes} https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+      elif [[ "${os}" == "Oracle" ]]; then
+        ${SUDO} dnf config-manager --set-enabled ol9_codeready_builder
       else
         ${SUDO} dnf install ${yes} dnf-plugins-core
         ${SUDO} dnf config-manager --set-enabled crb
